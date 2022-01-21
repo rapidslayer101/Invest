@@ -1,0 +1,4 @@
+yahoo-fin
+yfinance
+matplotlib
+forex_python
