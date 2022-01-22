@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from forex_python.converter import CurrencyRates, CurrencyCodes
 import yahoo_fin.stock_info as yf
 
+from enclib import search
+
 
 #from twilio.rest import Client
 #account_sid = "ACb558feef19198d8ccfe96ca8220dd189"
@@ -39,7 +41,6 @@ def log(text):
 
 # stocks to watch #
 stocks = ["TSLA", "BP"]
-# "TSLA", "BP"
 
 # the amount of the stocks you own (shares/dollars)
 stocks_own = ["6", ""]
@@ -62,7 +63,7 @@ if stockwatch == 1:
     changedatacheck = 320
 
 
-# SETTINGS LOGGING #
+# CODE START #
 
 def current_profit(current, bought, amount):
     c = CurrencyRates()
@@ -77,8 +78,7 @@ def current_profit(current, bought, amount):
 
 
 #def text(user, message):
-#    message = client.messages.create(to="+447597299247", from_="+15155188444",
-#    body="EXAMPLE BITCOIN NOTIFICATION MESSAGE")
+#    message = client.messages.create(to="+447597299247", from_="+15155188444", body="EXAMPLE TEXT")
 
 
 log("Bot started with settings:")
@@ -113,29 +113,30 @@ if stockwatch == 0:
 
 
 def plotgraph(stock, name, readback):
-    #with open(f'stocks/{stock}/{stock}.txt') as f:
-    with open(f'stocks/{stock}/{stock}-all_1d.txt') as f:
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    with open(f'stocks/{stock}/{stock}.txt') as f:
         lines = f.readlines()
         line_st = len(lines) - readback
         print(lines)
-        #y = [round(float(line.split()[0]), 2) for line in lines[line_st:]]
-        y = [round(float(line), 2) for line in lines[line_st:]]
-        #x = [line.split()[1] for line in lines[line_st:]]
+        y = np.array([round(float(line.split(", ")[4]), 2) for line in lines[line_st:]])
         x = [x for x in range(len(lines[line_st:]))]
-        print(y, x)
+        #x = [line.split(" [")[0][:4] for line in lines[line_st:]]
 
-        #first_line = lines[0]
-        #last_line = lines[-1]
-        #log(f"FIRST: {first_line}")
-        #log(f"LAST: {last_line}")
+    y_masked = np.ma.masked_less_equal(y, 1000)
 
     plt.style.use("dark_background")
     ax1 = plt.figure().add_subplot(111)
 
     ax1.set_title(f"STOCK: {stock}")
-    ax1.plot(x, y, c='r', label='share price')
+    ax1.set_ylabel("Price £")
+    ax1.set_xlabel("Days ago")
+    ax1.plot(x, y, c='r', label='share price', linewidth=0.5)
+    plt.plot(y_masked, 'g', linewidth=0.5)
+    plt.axhline(1000, color='b', linestyle='--', linewidth=0.25)
 
-    plt.savefig(f'stocks/{stock}/{stock}.png')
+    plt.savefig(f'stocks/{stock}/{stock}.png', dpi=300)
     plt.close()
 
     #webhook = DiscordWebhook(url=discord_webhook_url, content=name)
@@ -220,28 +221,34 @@ date = str(date)[:10]
 
 
 def data_collect(start_date, end_date, stock, run):
-    stockdata_1d = yf.get_data(start_date=start_date, end_date=end_date, ticker=stock, interval="1d")
-    try:
-        datacollect_go = 0
-        with open(f"stocks/{stock}/{stock}-all_1d.txt", "w") as f:
-            while True:
-                datacollect_go += 1
-                #dt = stockdata_1d[0].values[datacollect_go]
-                f.write(f"{round(stockdata_1d['close'].values[datacollect_go],2)}\n")
-    except:
-        if run == len(stocks):
-            log(f"└─> {stock} data successfully collected from {start_date} to {end_date}, total entries {datacollect_go-1}")
-        else:
-            log(f"├─> {stock} data successfully collected from {start_date} to {end_date}, total entries {datacollect_go-1}")
+    stockdata = yf.get_data(start_date=start_date, end_date=end_date, ticker=stock, interval="1d")
+    with open(f"stocks/{stock}/{stock}.txt", "w") as f:
+        [f.write(f'{search(str(stockdata.loc[rname]), "Name: ", ", dtype")} '
+                 f'{str(list(stockdata.loc[rname])[:-1])}\n') for rname in stockdata.index]
+
+    #while True:
+    #    datacollect_go += 1
+    #    #dt = stockdata_1d[0].values[datacollect_go]
+    #    f.write(f"{round(stockdata_1d['close'].values[datacollect_go],2)}\n")
+    #except:
+    #    if run == len(stocks):
+    #        log(f"└─> {stock} data successfully collected from {start_date} to {end_date}, total entries {datacollect_go-1}")
+    #    else:
+    #        log(f"├─> {stock} data successfully collected from {start_date} to {end_date}, total entries {datacollect_go-1}")
 
 
-run = 0
-for stock in stocks:
-    run += 1
-    #datacollect(start_date=date_1d, end_date=date, stock=stock, run=run) # data collect 1d
-    data_collect(start_date=date_begin, end_date=date, stock=stock, run=run)  # data collect 1d all
-    #print(yf.get_stats(stock))
-    #print(yf.get_quote_data(stock))
+update_stocks = True
+
+if update_stocks:
+    run = 0
+    for stock in stocks:
+        run += 1
+        #datacollect(start_date=date_1d, end_date=date, stock=stock, run=run) # data collect 1d
+        data_collect(start_date=date_begin, end_date=date, stock=stock, run=run)  # data collect 1d all
+        #print(yf.get_stats(stock))
+        #print(yf.get_quote_data(stock))
+
+    log("Finished collecting stock data")
 
 # CHECKING LIVE STOCKS #
 
@@ -377,7 +384,7 @@ if stockwatch == 1:
     log("checking stopped, the stock market has no new data to read")
 
 stock = "TSLA"
-plotgraph(stock=stock, name=f"{stock} closed", readback=2000)
+plotgraph(stock=stock, name=f"{stock} closed", readback=500)
 
 log("--------------------------------------------------")
 log(f"SCRIPT FINISHED EXECUTING AT {str(datetime.now())[:-4]}")
