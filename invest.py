@@ -2,12 +2,13 @@ import time, datetime, os, re  # inbuilt
 
 #import yfinance as yf1
 import matplotlib.pyplot as plt
+import yahoo_fin.stock_info as yf
+import numpy as np
 from datetime import datetime, timedelta
 #from discord_webhook import DiscordWebhook
 from forex_python.converter import CurrencyRates, CurrencyCodes
-import yahoo_fin.stock_info as yf
 
-from enclib import search
+from enclib import search  # custom lib
 
 
 #from twilio.rest import Client
@@ -22,33 +23,56 @@ start_time_standard = datetime.now()
 
 if not os.path.exists(f"output/logs.txt"):
     os.mkdir("output")
-with open(f"output/logs.txt", "w") as f:
-    f.write("")
+else:
+    with open(f"output/logs.txt", "w") as f:
+        f.write("")
 
 
 def log(text):
     print(text)
     with open("output/logs.txt", "a+", encoding="utf-8") as f:
         try:
-            write = f"{str(datetime.now())[:-4]} RUNTIME: {round(time.time() - start_time, 2):.2f} | {text}\n"
-            f.write(write)
+            write = f"{str(datetime.now())[:-4]} RUNTIME: {round(time.time()-start_time, 2):.2f} | {text}\n"
         except:
-            write = f"{str(datetime.now())[:-4]} RUNTIME: {round(time.time() - start_time, 2):.2f} | PRINTING ERROR\n"
-            f.write(write)
+            write = f"{str(datetime.now())[:-4]} RUNTIME: {round(time.time()-start_time, 2):.2f} | PRINTING ERROR\n"
+        f.write(write)
 
 
 # SETTINGS #
 
-# stocks to watch #
-stocks = ["TSLA", "BP"]
-
 # the amount of the stocks you own (shares/dollars)
-stocks_own = ["6", ""]
-purchase_price = ["2927.66", ""]
+
+user_list = []
+user_stock_data = []
+unique_stocks = []
+
+
+class users:
+    def add_user(self, user):
+        user_list.append(user)
+        user_stock_data.append({})
+
+    def get_user(self, user):
+        return user_stock_data[user_list.index(user)]
+
+    def update_stock(self, user, stock, amount, price, time):
+        if stock not in unique_stocks:
+            unique_stocks.append(stock)
+        user_stock_data[user_list.index(user)].update({stock: [amount, price, time]})
+
+
+users.add_user(0, "scott")
+print(users.update_stock(0, "scott", "TSLA", "6", "2927.66", "dt.object"))
+print(users.update_stock(0, "scott", "BP", "1", "100", "dt.object"))
+print(users.get_user(0, "scott"))
+print(unique_stocks)
+
+input()
 
 
 # watch live stock price data #
 stockwatch = 0
+
 
 if stockwatch == 1:
 
@@ -82,24 +106,8 @@ def current_profit(current, bought, amount):
 
 
 log("Bot started with settings:")
-log(f"├─> Stocks({len(stocks)}): {stocks}")
+log(f"├─> Stocks({len(unique_stocks)}): {unique_stocks}")
 stcounter1 = 0
-#try:
-for stock in stocks:
-    if not stocks_own[stcounter1] == "":
-        log(f"│   ├─> Registered owning of {stocks_own[stcounter1]} shares of {stock}")
-        if not purchase_price[stcounter1] == "":
-            log(f"│   │   └─> Buy price for {stocks_own[stcounter1]}x {stock} at {purchase_price[stcounter1]}")
-            current_profit(bought=float(purchase_price[stcounter1]), current=yf.get_live_price(stock), amount=stocks_own[stcounter1])
-        else:
-            log(f"│   │   └─> Buy price missing, please add in settings")
-    stcounter1 += 1
-log("│   └─> Total portfolio information:")
-log("│       ├─> Buy price:")
-log("│       ├─> Current value:")
-log("│       └─> Profit:")
-#except:
-log(f"│   └─> Could not read owned stock information, this is likely due to to a lack of fields in the settings")
 if stockwatch == 1:
     log("└─> Stockwatch ON, settings:")
     log(f"    ├─> How often to check live stocks: every {checktime}s")
@@ -112,10 +120,7 @@ if stockwatch == 0:
 # DEFINING #
 
 
-def plotgraph(stock, name, readback):
-    import numpy as np
-    import matplotlib.pyplot as plt
-
+def plot_graph(stock, name, readback):
     with open(f'stocks/{stock}/{stock}.txt') as f:
         lines = f.readlines()
         line_st = len(lines) - readback
@@ -148,7 +153,7 @@ def plotgraph(stock, name, readback):
 
 
 log("--------------------------------------------------")
-for stock in stocks:
+for stock in unique_stocks:
     log(f"Checking directory paths for {stock}")
     if not os.path.exists(f'stocks/{stock}'):
         os.makedirs(f'stocks/{stock}')
@@ -220,7 +225,7 @@ date_begin = str(date_begin)[:10]
 date = str(date)[:10]
 
 
-def data_collect(start_date, end_date, stock, run):
+def data_collect(start_date, end_date, stock):
     stockdata = yf.get_data(start_date=start_date, end_date=end_date, ticker=stock, interval="1d")
     with open(f"stocks/{stock}/{stock}.txt", "w") as f:
         [f.write(f'{search(str(stockdata.loc[rname]), "Name: ", ", dtype")} '
@@ -240,32 +245,21 @@ def data_collect(start_date, end_date, stock, run):
 update_stocks = True
 
 if update_stocks:
-    run = 0
-    for stock in stocks:
-        run += 1
-        #datacollect(start_date=date_1d, end_date=date, stock=stock, run=run) # data collect 1d
-        data_collect(start_date=date_begin, end_date=date, stock=stock, run=run)  # data collect 1d all
-        #print(yf.get_stats(stock))
-        #print(yf.get_quote_data(stock))
-
+    [data_collect(start_date=date_begin, end_date=date, stock=stock) for stock in unique_stocks]
     log("Finished collecting stock data")
 
 # CHECKING LIVE STOCKS #
 
 if stockwatch == 1:
-
     if loopchecks in range(0, 3):
         log("getting close prices...")
-
-    for stock in stocks:
-        with open(f"stocks/{stock}/{stock}.txt", "w") as f:
-            f.write("")
+    [open(f"stocks/{stock}/{stock}.txt", "w").write("").close() for stock in unique_stocks]
 
     go = 0
     while True:
         go += 1
         stockwatchinfo = ""
-        for stock in stocks:
+        for stock in unique_stocks:
             stockdata = str(yf.get_quote_data(stock))
 
             # current price
@@ -294,7 +288,7 @@ if stockwatch == 1:
                     f.write(f"{current:.2f} {go} {str(datetime.now())[:-4]} OPEN\n")
 
             if go % changedatacheck == 0:
-                plotgraph(stock=stock, name=f"{stock} live [time period]", readback=30)
+                plot_graph(stock=stock, name=f"{stock} live [time period]", readback=30)
 
             stockwatchinfo = f"{stockwatchinfo}{stock} {current:.2f} {open_change:.2f} {open_change_percent:.2f}% "
 
@@ -315,7 +309,7 @@ if stockwatch == 1:
             go_closed = go_closed + 1
             stockwatchinfo_closed = ""
             try:
-                for stock in stocks:
+                for stock in unique_stocks:
                     # pre market
                     if loopchecks == 1:
                         stockdata = str(yf.get_quote_data(stock))
@@ -366,7 +360,7 @@ if stockwatch == 1:
                         f.write(f"{current_closed:.2f} {go_closed} {str(datetime.now())[:-4]} POST\n")
 
                     if go_closed % changedatacheck/5 == 0:
-                        plotgraph(stock=stock, name=f"{stock} closed", readback=30)
+                        plot_graph(stock=stock, name=f"{stock} closed", readback=30)
 
                     stockwatchinfo_closed = f"{stockwatchinfo_closed}{stock} {current_closed:.2f} {closed_change} {closed_change_percent}% "
                 log(f"{stockwatchinfo_closed}  {str(datetime.now())[:-4]}")
@@ -384,7 +378,7 @@ if stockwatch == 1:
     log("checking stopped, the stock market has no new data to read")
 
 stock = "TSLA"
-plotgraph(stock=stock, name=f"{stock} closed", readback=500)
+plot_graph(stock=stock, name=f"{stock} closed", readback=500)
 
 log("--------------------------------------------------")
 log(f"SCRIPT FINISHED EXECUTING AT {str(datetime.now())[:-4]}")
