@@ -20,11 +20,10 @@ from enclib import search  # custom lib
 
 start_time = time.time()
 
-if not os.path.exists(f"output/logs.txt"):
+if not os.path.exists(f"output"):
     os.mkdir("output")
-else:
-    with open(f"output/logs.txt", "w") as f:
-        f.write("")
+with open(f"output/logs.txt", "w") as f:
+    f.write("")
 
 
 def log(text):
@@ -39,7 +38,7 @@ def log(text):
 
 if not os.path.exists(f"stocks"):
     os.mkdir("stocks")
-if not os.path.exists(f"stocks/stock_data.txt.txt"):
+if not os.path.exists(f"stocks/stock_data.txt"):
     with open("stocks/stock_data.txt", "w") as f:
         f.write("")
 with open("stocks/stock_data.txt") as f:
@@ -60,44 +59,86 @@ class users:
         user_list.append(user)
         user_stock_data.append({})
 
-    def get_user(self, user):
+    def get_user_stocks(self, user):
         return user_stock_data[user_list.index(user)]
 
-    def update_stock(self, user, stock, amount, price, time):
+    def get_user_stock(self, user, stock):
+        return user_stock_data[user_list.index(user)][stock]
+
+    def buy_stock(self, user, stock, amount_buy, buy_price, buy_time):
         if stock not in unique_stocks:
             unique_stocks.append(stock)
-        user_stock_data[user_list.index(user)].update({stock: [amount, price, time]})
+        counter = 1
+        stock_pn = f"{stock}:{counter}"
+        while True:
+            if stock_pn not in user_stock_data[user_list.index(user)]:
+                break
+            counter += 1
+            stock_pn = f"{stock}:{counter}"
+        user_stock_data[user_list.index(user)].update({stock_pn: [[float(amount_buy), float(buy_price), buy_time], []]})
+
+    def sell_stock(self, user, stock, amount_sell, sell_price, sell_time):
+        sales = users.get_user_stock(0, user, stock)[1]
+        sales.append([float(amount_sell), float(sell_price), sell_time])
+        user_stock_data[user_list.index(user)].update({stock: [users.get_user_stock(0, user, stock)[0], sales]})
 
     def load(self):
-        with open(f"stocks/stock_data.txt.txt") as f:
-            for line in f.readlines()[:-1]:
-                print(line.split(" {"))
-    # todo finish load
+        with open(f"stocks/stock_data.txt") as f:
+            for line in f.readlines():
+                user, user_data = line.replace("}\n", "").split(" {")
+                if user not in user_list:
+                    users.add_user(0, user)
+                user_data = user_data.split("]], ")
+
+                for stock in user_data:
+                    name = stock.split("': [[")[0].replace("'", "")
+                    stock_data = str(stock.split("': [[")[1:])[:-2]
+                    purchase = stock_data.split("'], [")[0]
+                    sell = stock_data.split("'], [")[1:]
+                    amount_buy, buy_price, buy_time = purchase[2:].replace("'", "").split(", ")
+
+                    sales = []
+                    for sale in sell:
+                        try:
+                            if not sale == "":
+                                sale = sale.replace("]", "").replace("\"", "").replace("[", "").replace("'", "")
+                                amount_sell, sell_price, sell_time = sale.split(", ")
+                                sales.append([float(amount_sell), float(sell_price), sell_time])
+                        except:
+                            pass
+                    user_stock_data[user_list.index(user)]\
+                        .update({name: [[float(amount_buy), float(buy_price), buy_time.replace("'", "")], sales]})
 
     def save(self):
-        with open(f"stocks/stock_data.txt.txt", "w") as f:
+        with open(f"stocks/stock_data.txt", "w") as f:
             [f.write(f"{user} {user_stock_data[user_list.index(user)]}\n") for user in user_list]
 
 
-users.add_user(0, "scott")
-users.update_stock(0, "scott", "TSLA", "6", "2927.66", "dt.object")
-users.add_user(0, "hugo")
-users.update_stock(0, "hugo", "TSLA", "2", "2930.00", "dt.object")
-users.update_stock(0, "scott", "BP", "1", "100", "dt.object")
-print(user_stock_data)
-print("scott", users.get_user(0, "scott"))
-print("hugo", users.get_user(0, "hugo"))
-print("unique stock", unique_stocks)
-users.save(0)
+new_values = True
+
+if new_values:
+    users.add_user(0, "scott")
+    users.buy_stock(0, "scott", "TSLA", 6.0, 2927.66, "dt.object")
+    users.add_user(0, "hugo")
+    users.buy_stock(0, "scott", "TSLA", 2.0, 2930.00, "dt.object")
+    users.buy_stock(0, "hugo", "BP", 1.0, 100.0, "dt.object")
+    print(user_stock_data)
+    users.sell_stock(0, "scott", "TSLA:2", 0.5, 50.0, "dt.object")
+    users.sell_stock(0, "scott", "TSLA:2", 0.75, 50.0, "dt.object")
+    print("unique stock", unique_stocks)
+    print(user_stock_data)
+    users.save(0)
+
 users.load(0)
+print(user_stock_data)
 input("Hit enter to continue: ")
 
 
 # watch live stock price data #
-stockwatch = 0
+stockwatch = True
 
 
-if stockwatch == 1:
+if stockwatch:
 
     # how often to check stocks list (seconds) #
     checktime = 1           # when market "open"
@@ -131,12 +172,12 @@ def current_profit(current, bought, amount):
 log("Bot started with settings:")
 log(f"├─> Stocks({len(unique_stocks)}): {unique_stocks}")
 stcounter1 = 0
-if stockwatch == 1:
+if stockwatch:
     log("└─> Stock watch ON, settings:")
     log(f"    ├─> How often to check live stocks: every {checktime}s")
     log(f"    ├─> How often to check closed stocks: every {checktime_closed}s")
     log(f"    └─> How often to check the current market status: every {statuscheck}m")
-if stockwatch == 0:
+else:
     log("└─> Stock watch OFF")
 
 
@@ -262,11 +303,12 @@ if update_stocks:
 
 # CHECKING LIVE STOCKS #
 
-if stockwatch == 1:
+if stockwatch:
     if loopchecks in range(0, 3):
         log("getting close prices...")
-    [open(f"stocks/{stock}/{stock}.txt", "w").write("").close() for stock in unique_stocks]
-
+    for stock in unique_stocks:
+        with open(f"stocks/{stock}/{stock}_live.txt", "w") as f:
+            f.write("")
     go = 0
     while True:
         go += 1
@@ -296,7 +338,7 @@ if stockwatch == 1:
                 open_change_percent = 0
 
             if loopchecks == 3:
-                with open(f"stocks/{stock}/{stock}.txt", "a+") as f:
+                with open(f"stocks/{stock}/{stock}_live.txt", "a+") as f:
                     f.write(f"{current:.2f} {go} {str(datetime.now())[:-4]} OPEN\n")
 
             if go % changedatacheck == 0:
@@ -368,7 +410,7 @@ if stockwatch == 1:
                         if m:
                             closed_change_percent = round(float(m.group(1)), 2)
 
-                    with open(f"stocks/{stock}/{stock}.txt", "a+") as f:
+                    with open(f"stocks/{stock}/{stock}_live.txt", "a+") as f:
                         f.write(f"{current_closed:.2f} {go_closed} {str(datetime.now())[:-4]} POST\n")
 
                     if go_closed % changedatacheck/5 == 0:
